@@ -5,9 +5,13 @@ out vec4 FragColor;
 in vec2 texCoord;
 
 uniform sampler2D imageTexture;
+uniform int u_tileSize;
+uniform float u_clipLimit;
 
-const vec3 STANDAR_ILLUMINANT = vec3(0.95047, 1, 1.0888); //D65
+const int NUM_BINS = 101;
+const vec3 STANDART_ILLUMINANT = vec3(0.95047, 1, 1.0888); //D65
 
+// sRGB <-> LinearRGB
 
 vec3 sRGB_to_linearRGB(vec3 srgb_color) {
 
@@ -39,25 +43,39 @@ vec3 linearRGB_to_sRGB(vec3 linearRGB_color) {
     return sRGB_color;
 }
 
+// LinearRGB <-> XYZ
 
 vec3 linearRGB_to_XYZ(vec3 rgb_color) {
-
+    /*
     return mat3(
         0.4124564, 0.3575761, 0.1804375,
         0.2126729, 0.7151522, 0.0721750,
         0.0193339, 0.1191920, 0.9503041
     ) * rgb_color;
+    */
+    return mat3(
+        0.4124, 0.2126, 0.0193,
+        0.3576, 0.7152, 0.1192, 
+        0.1805, 0.0722, 0.9505
+    ) * rgb_color;
 }
 
 vec3 XYZ_to_linearRGB(vec3 xyz_color) {
-
+    /*
     return mat3(
     3.2404542, -1.5371385, -0.4985314,
     -0.9692660, 1.8760108, 0.0415560,
     0.0556434, -0.2040259, 1.0572252
     ) * xyz_color;
+    */
+    return mat3(
+        3.2406, -0.9689, 0.0557,
+        -1.5372, 1.8758, -0.2040,
+        -0.4986, 0.0415, 1.0570
+    ) * xyz_color;
 }
 
+// XYZ <-> LAB
 
 float f(float t) {
 
@@ -80,7 +98,7 @@ float inv_f(float t) {
 
 vec3 xyz_to_lab(vec3 xyz_color) {
 
-    vec3 xyz_color_norm = xyz_color / STANDAR_ILLUMINANT;
+    vec3 xyz_color_norm = xyz_color / STANDART_ILLUMINANT;
 
     float l = 116.0 * f(xyz_color_norm.y) - 16.0;
     float a = 500.0 * (f(xyz_color_norm.x) - f(xyz_color_norm.y));
@@ -91,13 +109,14 @@ vec3 xyz_to_lab(vec3 xyz_color) {
 
 vec3 lab_to_xyz(vec3 lab_color) {
 
-    float x = STANDAR_ILLUMINANT.x * inv_f((lab_color.x + 16.0)/116.0 + lab_color.y/500.0);
-    float y = STANDAR_ILLUMINANT.y * inv_f((lab_color.x + 16.0)/116.0);
-    float z = STANDAR_ILLUMINANT.z * inv_f(((lab_color.x + 16.0)/116.0) - lab_color.z/200.0);
+    float x = STANDART_ILLUMINANT.x * inv_f((lab_color.x + 16.0)/116.0 + lab_color.y/500.0);
+    float y = STANDART_ILLUMINANT.y * inv_f((lab_color.x + 16.0)/116.0);
+    float z = STANDART_ILLUMINANT.z * inv_f(((lab_color.x + 16.0)/116.0) - lab_color.z/200.0);
 
     return vec3(x, y, z);
 }
 
+// sRGB <-> LAB
 
 vec3 sRGB_to_lab(vec3 sRGB_color) {
     vec3 linearRGB_color = sRGB_to_linearRGB(sRGB_color);
@@ -115,13 +134,93 @@ vec3 lab_to_sRGB(vec3 lab_color) {
     return sRGB_color;
 }
 
+// CLAHE
+
+ivec2 getTileCoord(vec2 texCoord, sampler2D imageTexture) {
+    return ivec2(floor(texCoord * vec2(textureSize(imageTexture, 0)) / float(u_tileSize)));
+}
+
+vec2 getLocalCoord(vec2 texCoord, sampler2D imageTexture) {
+    return fract(texCoord * vec2(textureSize(imageTexture, 0)) / float(u_tileSize));
+}
+
+vec2 convertLocalToGlobalCoord(vec2 tileCoord, vec2 localCoord) {
+    return ((tileCoord + localCoord) * u_tileSize) / vec2(textureSize(imageTexture, 0));
+}
+
+void calcutaleHistogram(sampler2D imageTexture, ivec2 tileCoord, out float histogram[NUM_BINS]) {
+    for (int i = 0; i < NUM_BINS; ++i) {
+        histogram[i] = 0.0;
+    }
+
+    for (int y = 0; y < u_tileSize; ++y) {
+        for (int x = 0; x < u_tileSize; ++x) {
+            vec2 offset = vec2(x, y) / u_tileSize;
+
+            vec2 tilePixelCoord = convertLocalToGlobalCoord(tileCoord, offset);
+
+            vec3 tilePixelRGB= texture(imageTexture, clamp(tilePixelCoord, 0.0, 1.0)).rgb;
+            vec3 tilePixelLab = sRGB_to_lab(tilePixelRGB);
+
+            float tilePixelLuminance = tilePixelLab.x;
+            int index = int(tilePixelLuminance);
+
+            histogram[index] += 1.0;
+        }
+    }
+}
+
+void clipAndRedistribute(inout float histogram[NUM_BINS]) {
+    float excess = 0.0;
+
+    for (int i = 0; i < NUM_BINS; ++i) {
+        float limit = u_clipLimit * float(u_tileSize * u_tileSize) / NUM_BINS;
+    
+        if (histogram[i] > limit) {
+            excess += histogram[i] - limit;
+            histogram[i] = limit;
+        }
+    }
+
+    float increment = excess / NUM_BINS;
+    for (int i = 0; i < NUM_BINS; ++i) {
+        histogram[i] += increment;
+    }
+}
+
+void calculateCDF(in float histogram[NUM_BINS], out float cdf[NUM_BINS]) {
+    cdf[0] = histogram[0];
+
+    for (int i = 0; i < NUM_BINS; ++i) {
+        cdf[i] = cdf[i-1] + histogram[i];
+    }
+
+    for (int i = 0; i < NUM_BINS; ++i) {
+        cdf[i] /= float(u_tileSize * u_tileSize);
+    }
+
+}
 
 void main() {
 
     vec3 sRGB_color = texture(imageTexture, texCoord).rgb;
-    
+ 
     vec3 lab_color = sRGB_to_lab(sRGB_color);
-    vec3 new_sRGB_color = lab_to_sRGB(lab_color);
 
-    FragColor = vec4(new_sRGB_color, 1.0);
+    float L = lab_color.x;
+
+    ivec2 tileCoord = ivec2(floor(texCoord * vec2(textureSize(imageTexture, 0)) / float(u_tileSize)));
+    vec2 localUV =  fract(texCoord * vec2(textureSize(imageTexture, 0)) / float(u_tileSize));
+    
+    float histogram[NUM_BINS];
+    calcutaleHistogram(imageTexture, tileCoord, histogram);
+    clipAndRedistribute(histogram);
+
+    float cdf[NUM_BINS];
+    calculateCDF(histogram, cdf);
+
+    vec3 newLab = vec3(cdf[int(L)] * 100.0, lab_color.y, lab_color.z);
+    vec3 new_sRGB_color = lab_to_sRGB(newLab);
+
+    FragColor = vec4(clamp(new_sRGB_color, 0.0, 1.0), 1.0);
 }

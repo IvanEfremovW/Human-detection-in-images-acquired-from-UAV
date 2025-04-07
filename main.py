@@ -48,6 +48,14 @@ class Program:
         
         return program
     
+    def set_uniform1i(self, name, value):
+        location = glGetUniformLocation(self.id, name)
+        glUniform1i(location, value)
+    
+    def set_uniform1f(self, name, value):
+        location = glGetUniformLocation(self.id, name)
+        glUniform1f(location, float(value))
+    
     def use(self):
         glUseProgram(self.id)
         
@@ -132,9 +140,14 @@ class Texture:
        
 
 class ImageProcessor:
-    def __init__(self, image_path):
+    def __init__(self, image_path, tile_size=16, clip_limit=5.0):
         self.image_path = image_path
         self.width, self.height, self.image_data = self._load_image()
+        
+        self.tile_size = tile_size
+        self.clip_limit = clip_limit
+        
+        self.NUM_BINS = 101
         
         self._create_context()
         
@@ -154,6 +167,12 @@ class ImageProcessor:
         self.fragment_shader = Shader(GL_FRAGMENT_SHADER, 'shaders/fragment_shader.glsl')
 
         self.program = Program(self.vertex_shader, self.fragment_shader)
+        
+        self.program.use()
+        
+        self.program.set_uniform1i('u_tileSize', self.tile_size)
+        self.program.set_uniform1i('u_numBins', self.NUM_BINS)
+        self.program.set_uniform1f('u_clipLimit', self.clip_limit)
         
         self.vao = VertexArray()
         self.vbo = Buffer(GL_ARRAY_BUFFER)
@@ -178,6 +197,9 @@ class ImageProcessor:
         self.texture.bind()
         self.texture.load_data(self.width, self.height, self.image_data)
         self.texture.unbind()
+        
+        self.program.use()
+        
         
     def _create_context(self):
         if not glfw.init():
