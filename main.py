@@ -2,9 +2,8 @@ from PIL import Image
 
 import numpy as np
 from OpenGL.GL import *
+from OpenGL.GL.shaders import compileProgram, compileShader
 import glfw
-
-
 
 
 class Shader:
@@ -14,15 +13,8 @@ class Shader:
     def _load_shader(self, shader_type, filename):
         with open(filename, 'r') as file:
             shader_code = file.read()
-            
-        shader = glCreateShader(shader_type)
-        
-        glShaderSource(shader, shader_code)
-        glCompileShader(shader)
-        
-        if not glGetShaderiv(shader, GL_COMPILE_STATUS):
-            info_log = glGetShaderInfoLog(shader)
-            raise RuntimeError(f"Shader compilation failed: {info_log.decode()}")
+
+        shader = compileShader(shader_code, shader_type)
         
         return shader
     
@@ -31,23 +23,15 @@ class Shader:
    
 
 class Program:
-    def __init__(self, vertex_shader, fragment_shader):
-        self.id = self._create_program(vertex_shader.id, fragment_shader.id)
-    
-    def _create_program(self, vertex_shader_id, fragment_shader_id):
-        program = glCreateProgram()
+    def __init__(self, *shaders):
+        self.id = self._create_program(*shaders)
 
-        glAttachShader(program, vertex_shader_id)
-        glAttachShader(program, fragment_shader_id)
-        
-        glLinkProgram(program)
-
-        if not glGetProgramiv(program, GL_LINK_STATUS):
-            info_log = glGetProgramInfoLog(program)
-            raise RuntimeError(f"Program linking failed: {info_log.decode()}")
+    def _create_program(self, *shaders):
+        shader_ids = [shader.id for shader in shaders]
+        program = compileProgram(*shader_ids)
         
         return program
-    
+        
     def set_uniform1i(self, name, value):
         location = glGetUniformLocation(self.id, name)
         glUniform1i(location, value)
@@ -94,14 +78,6 @@ class VertexArray:
     def linkAttrib(self, layout, size, type, normalized, stride, offset):
         glVertexAttribPointer(layout, size, type, normalized, stride, GLvoidp(offset))
         glEnableVertexAttribArray(layout)
-    
-    """
-    def enable_attrib_array(self, index):
-        glEnableVertexAttribArray(index)
-     
-    def vertex_attrib_pointer(self, index, size, type, normalized, stride, offset):
-        glVertexAttribPointer(index, size, type, normalized, stride, GLvoidp(offset))
-    """
 
     def delete(self):
         glDeleteVertexArrays(1, [self.id])
@@ -258,7 +234,8 @@ class ImageProcessor:
         
         glfw.destroy_window(self.window)
         glfw.terminate()
-    
+        
+
 if __name__ == "__main__":
     processor = ImageProcessor('images/image.jpg')
     processor.render_window()
