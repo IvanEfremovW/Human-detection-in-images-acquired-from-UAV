@@ -51,6 +51,9 @@ class Buffer:
     def bind(self):
         glBindBuffer(self.target, self.id)
     
+    def bind_base(self, index):
+        glBindBufferBase(self.target, index, self.id)
+    
     def data(self, data, usage):
         glBufferData(self.target, data.nbytes, data, usage)
 
@@ -94,7 +97,6 @@ class Texture:
     def bind_image_texture(self, unit, access):
         glBindImageTexture(unit, self.id, 0, GL_FALSE, 0, access, GL_RGBA32F)
 
-        
     def unbind(self):
         glBindTexture(GL_TEXTURE_2D, self.id)
 
