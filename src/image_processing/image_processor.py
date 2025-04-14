@@ -102,7 +102,20 @@ class ImageProcessor:
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, None)
         
         self.vao.unbind()
+    
+    def render_to_file(self, output_path):
+        glClearColor(0.07, 0.13, 0.17, 1.0)
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+            
+        self.draw()
+
+        pixels = glReadPixels(0, 0, self.width, self.height, GL_RGBA, GL_UNSIGNED_BYTE)
+        image = Image.frombuffer("RGBA", (self.width, self.height), pixels, "raw", "RGBA", 0, 0)
+        image = image.convert("RGB")  # Convert to RGB for JPEG compatibility
+        image.save(output_path)
         
+        self.delete()
+
     def render_window(self):
         while not glfw.window_should_close(self.window):
             glClearColor(0.07, 0.13, 0.17, 1.0)
