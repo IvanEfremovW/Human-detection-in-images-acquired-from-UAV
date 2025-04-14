@@ -204,22 +204,55 @@ void calculateCDF(in float histogram[NUM_BINS], out float cdf[NUM_BINS]) {
 void main() {
 
     vec3 sRGB_color = texture(imageTexture, texCoord).rgb;
- 
     vec3 lab_color = sRGB_to_lab(sRGB_color);
-
     float L = lab_color.x;
 
-    ivec2 tileCoord = ivec2(floor(texCoord * vec2(textureSize(imageTexture, 0)) / float(u_tileSize)));
-    vec2 localUV =  fract(texCoord * vec2(textureSize(imageTexture, 0)) / float(u_tileSize));
+    ivec2 tileCoord = getTileCoord(texCoord, imageTexture);
+    vec2 localUV = getLocalCoord(texCoord, imageTexture);
+
+    ivec2 tileCoord1 = tileCoord;
+    ivec2 tileCoord2 = tileCoord + ivec2(1, 0);
+    ivec2 tileCoord3 = tileCoord + ivec2(0, 1);
+    ivec2 tileCoord4 = tileCoord + ivec2(1, 1);
+
+    // Предотвращение выхода за границы изображения
+    ivec2 numTiles = ivec2(textureSize(imageTexture, 0)) / u_tileSize;
+    tileCoord2 = ivec2(min(tileCoord2.x, numTiles.x - 1), tileCoord2.y);
+    tileCoord3 = ivec2(tileCoord3.x, min(tileCoord3.y, numTiles.y - 1));
+    tileCoord4 = ivec2(min(tileCoord4.x, numTiles.x - 1), min(tileCoord4.y, numTiles.y - 1));
+
+    float histogram1[NUM_BINS];
+    float histogram2[NUM_BINS];
+    float histogram3[NUM_BINS];
+    float histogram4[NUM_BINS];
+
+    calcutaleHistogram(imageTexture, tileCoord1, histogram1);
+    clipAndRedistribute(histogram1);
     
-    float histogram[NUM_BINS];
-    calcutaleHistogram(imageTexture, tileCoord, histogram);
-    clipAndRedistribute(histogram);
+    calcutaleHistogram(imageTexture, tileCoord2, histogram2);
+    clipAndRedistribute(histogram2);
+    
+    calcutaleHistogram(imageTexture, tileCoord3, histogram3);
+    clipAndRedistribute(histogram3);
+    
+    calcutaleHistogram(imageTexture, tileCoord4, histogram4);
+    clipAndRedistribute(histogram4);
 
-    float cdf[NUM_BINS];
-    calculateCDF(histogram, cdf);
+    float cdf1[NUM_BINS];
+    float cdf2[NUM_BINS];
+    float cdf3[NUM_BINS];
+    float cdf4[NUM_BINS];
 
-    vec3 newLab = vec3(cdf[int(L)] * 100.0, lab_color.y, lab_color.z);
+    calculateCDF(histogram1, cdf1);
+    calculateCDF(histogram2, cdf2);
+    calculateCDF(histogram3, cdf3);
+    calculateCDF(histogram4, cdf4);
+
+    // Билинейная интерполяция значений CDF
+    float cdfValue = mix(mix(cdf1[int(L)], cdf2[int(L)], localUV.x),
+                        mix(cdf3[int(L)], cdf4[int(L)], localUV.x), localUV.y);
+
+    vec3 newLab = vec3(cdfValue * 100.0, lab_color.y, lab_color.z);
     vec3 new_sRGB_color = lab_to_sRGB(newLab);
 
     FragColor = vec4(clamp(new_sRGB_color, 0.0, 1.0), 1.0);
