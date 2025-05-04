@@ -106,7 +106,7 @@ class Texture:
         glBindTexture(GL_TEXTURE_2D, self.id)
 
     def bind_image_texture(self, unit: int, access: OpenGL.constant.IntConstant):
-        glBindImageTexture(unit, self.id, 0, GL_FALSE, 0, access, GL_RGBA32F)
+        glBindImageTexture(unit, self.id, 0, GL_FALSE, 0, access, GL_RGBA8)
 
     def unbind(self):
         glBindTexture(GL_TEXTURE_2D, self.id)
@@ -125,4 +125,4 @@ class Texture:
         glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data)
     
     def delete(self):
-        glDeleteTextures(1, [self.id])
+        glDeleteTextures(1, (self.id,))

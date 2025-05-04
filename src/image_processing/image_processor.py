@@ -5,6 +5,8 @@ from PIL import Image
 
 from image_processing.opengl_utils import *
 
+from time import perf_counter
+
 class ImageProcessor:
     def __init__(self, tile_size=8, clip_limit=2.0):
         self.tile_size = tile_size
@@ -47,8 +49,8 @@ class ImageProcessor:
         glfw.swap_interval(0)
         
     def _init_opengl_resourses(self):
-        self.cdf_shader = Shader(GL_COMPUTE_SHADER, 'shaders/cs_cdf.glsl')
-        self.clahe_shader = Shader(GL_COMPUTE_SHADER, 'shaders/cs_clahe.glsl')
+        self.cdf_shader = Shader(GL_COMPUTE_SHADER, 'src/image_processing/shaders/cs_cdf.glsl')
+        self.clahe_shader = Shader(GL_COMPUTE_SHADER, 'src/image_processing/shaders/cs_clahe.glsl')
         
         self.cdf_program = Program(self.cdf_shader)
         self.clahe_program = Program(self.clahe_shader)
@@ -59,16 +61,45 @@ class ImageProcessor:
     
     def process(self, image_path, output_path):
         
+        process_time = perf_counter()
+        
         if not self._load_image(image_path):
             print("Failed to load image.")
             return False
 
+        load_time = 1000 * (perf_counter() - process_time)
+        
+        shader_init_time = perf_counter()
+        
         self._create_textures_and_buffers()
 
+        shader_init_time = 1000 * (perf_counter() - shader_init_time)
+        
         try:
+            shader_processing_time = perf_counter()
+            
             self._compute_clahe()
+            
+            shader_processing_time = 1000 * (perf_counter() - shader_processing_time)
+            
+            saving_time = perf_counter()
+            
             self._save_image(output_path)
-            return True
+            
+            saving_time = 1000 * (perf_counter() - saving_time)
+            
+            process_time = 1000 * (perf_counter() - process_time)
+            
+            perf_log = {
+                'time_total': process_time,
+                'time_shader_init': shader_init_time,
+                'time_shader_processing': shader_processing_time,
+                'time_loading_image': load_time,
+                'time_saving_image': saving_time
+                }
+            
+            return perf_log
+        
         except Exception as e:
             print(f"Error loading image: {e}")
             return False
@@ -162,8 +193,8 @@ class ImageProcessor:
         image = Image.frombuffer("RGBA", (self.image_width, self.image_height), pixels, "raw", "RGBA", 0, 0)
 
         try:
-            image.save(output_path)
-            print(f"Processed, saved in {output_path}")
+            image = image.convert("RGB")
+            image.save(output_path, "JPEG")
         except Exception as e:
             print(f"Error saving image: {e}")
 
@@ -177,3 +208,13 @@ class ImageProcessor:
         if self.histogram_cdf_buffer:
             self.histogram_cdf_buffer.delete()
             self.histogram_cdf_buffer = None
+            
+    def delete(self):
+        self.cdf_shader.delete()
+        self.clahe_shader.delete()
+        
+        self.cdf_program.delete()
+        self.clahe_program.delete()
+        
+        glfw.destroy_window(self.window)
+        glfw.terminate()
