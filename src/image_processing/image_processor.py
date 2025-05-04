@@ -5,6 +5,8 @@ import glfw
 
 from image_processing.opengl_utils import Shader, Program, Buffer, VertexArray, Texture
 
+from time import perf_counter
+
 class ImageProcessor:
     def __init__(self, tile_size=8, clip_limit=2.0):
         self.tile_size = tile_size
@@ -52,8 +54,8 @@ class ImageProcessor:
             2, 3, 0
         ], dtype=np.uint32)
         
-        self.vertex_shader = Shader(GL_VERTEX_SHADER, 'shaders/vertex_shader.glsl')
-        self.fragment_shader = Shader(GL_FRAGMENT_SHADER, 'shaders/fragment_shader.glsl')
+        self.vertex_shader = Shader(GL_VERTEX_SHADER, 'src/image_processing/shaders/vertex_shader.glsl')
+        self.fragment_shader = Shader(GL_FRAGMENT_SHADER, 'src/image_processing/shaders/fragment_shader.glsl')
 
         self.program = Program(self.vertex_shader, self.fragment_shader)
         
@@ -81,21 +83,51 @@ class ImageProcessor:
         self.ebo.unbind() 
     
     def process(self, input_path, output_path):
-
+        
+        process_time = perf_counter()
+        
         if not self._load_image(input_path):
             print("Failed to load image.")
             return False
         
-        texture = Texture()
+        load_time = 1000 * (perf_counter() - process_time)
         
-        texture.bind()
-        texture.load_data(self.image_width, self.image_height, self.image_data)
-        texture.unbind()
+        shader_init_time = perf_counter()
+        
+        self.texture = Texture()
+        
+        self.texture.bind()
+        self.texture.load_data(self.image_width, self.image_height, self.image_data)
+        self.texture.unbind()
 
-        self._draw(texture)
+        shader_init_time = 1000 * (perf_counter() - shader_init_time)
+        
+        shader_processing_time = perf_counter()
+        
+        self._draw()
 
+        shader_processing_time = 1000 * (perf_counter() - shader_processing_time)
+        
+        saving_time = perf_counter()
+        
         self._render_to_file(output_path)
-   
+        
+        saving_time = 1000 * (perf_counter() - saving_time)
+
+        self.texture.delete()
+        
+        process_time = 1000 * (perf_counter() - process_time)
+
+        perf_log = {
+            'time_total': process_time,
+            'time_shader_init': shader_init_time,
+            'time_shader_processing': shader_processing_time,
+            'time_loading_image': load_time,
+            'time_saving_image': saving_time
+            }
+
+        return perf_log
+        
     def _load_image(self, image_path):
         
         self.image_path = image_path
@@ -115,7 +147,7 @@ class ImageProcessor:
             return False
         return True
     
-    def _draw(self, texture: Texture):
+    def _draw(self):
         glClearColor(0.07, 0.13, 0.17, 1.0)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
                 
@@ -123,7 +155,7 @@ class ImageProcessor:
          
         self.program.use()
         
-        texture.bind()
+        self.texture.bind()
         self.vao.bind()
         
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, None)
@@ -135,9 +167,9 @@ class ImageProcessor:
         pixels = glReadPixels(0, 0, self.image_width, self.image_height, GL_RGBA, GL_UNSIGNED_BYTE)
 
         image = Image.frombuffer("RGBA", (self.image_width, self.image_height), pixels, "raw", "RGBA", 0, 0)
-        image.save(output_path)
-
-        self.delete()
+        
+        image = image.convert("RGB")
+        image.save(output_path, "JPEG")
 
     def delete(self):
         self.vao.delete()

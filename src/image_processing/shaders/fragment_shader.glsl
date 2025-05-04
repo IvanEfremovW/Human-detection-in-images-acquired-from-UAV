@@ -252,6 +252,8 @@ void main() {
     float cdfValue = mix(mix(cdf1[int(L)], cdf2[int(L)], localUV.x),
                         mix(cdf3[int(L)], cdf4[int(L)], localUV.x), localUV.y);
 
+    cdfValue = cdf1[int(L)];
+
     vec3 newLab = vec3(cdfValue * 100.0, lab_color.y, lab_color.z);
     vec3 new_sRGB_color = lab_to_sRGB(newLab);
 
