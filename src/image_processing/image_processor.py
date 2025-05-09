@@ -7,8 +7,6 @@ from image_processing.opengl_utils import *
 
 from time import perf_counter
 
-from time import perf_counter
-
 class ImageProcessor:
     def __init__(self, tile_size=8, clip_limit=2.0):
         self.tile_size = tile_size
@@ -41,8 +39,6 @@ class ImageProcessor:
             glfw.terminate()
             raise Exception("GLFW window creation failed")
 
-        shader_processing_time = 1000 * (perf_counter() - shader_processing_time)
-        
         glfw.window_hint(glfw.VISIBLE, False)
                 
         glfw.make_context_current(self.window)

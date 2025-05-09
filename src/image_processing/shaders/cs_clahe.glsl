@@ -57,13 +57,6 @@ vec3 linearRGB_to_sRGB(vec3 linearRGB_color) {
 // LinearRGB <-> XYZ
 
 vec3 linearRGB_to_XYZ(vec3 rgb_color) {
-    /*
-    return mat3(
-        0.4124564, 0.3575761, 0.1804375,
-        0.2126729, 0.7151522, 0.0721750,
-        0.0193339, 0.1191920, 0.9503041
-    ) * rgb_color;
-    */
 
     return mat3(
         0.4124, 0.2126, 0.0193,
@@ -74,13 +67,6 @@ vec3 linearRGB_to_XYZ(vec3 rgb_color) {
 }
 
 vec3 XYZ_to_linearRGB(vec3 xyz_color) {
-    /*
-    return mat3(
-    3.2404542, -1.5371385, -0.4985314,
-    -0.9692660, 1.8760108, 0.0415560,
-    0.0556434, -0.2040259, 1.0572252
-    ) * xyz_color;
-    */
 
     return mat3(
         3.2406, -0.9689, 0.0557,
@@ -199,7 +185,7 @@ void main() {
     uint tileIndex4 = getTileIndex(min(tileX + 1, imageWidth / u_tileSize - 1), min(tileY + 1, imageHeight / u_tileSize - 1));
 
     float cdfValue = mix(mix(tileData[tileIndex1].cdf[int(L)], tileData[tileIndex2].cdf[int(L)], localX),
-                        mix(tileData[tileIndex3].cdf[int(L)], tileData[tileIndex4].cdf[int(L)], localY), localY);
+                        mix(tileData[tileIndex3].cdf[int(L)], tileData[tileIndex4].cdf[int(L)], localX), localY);
 
     vec3 newLab = vec3(cdfValue * 100.0, lab_color.y, lab_color.z);
     vec3 new_sRGB_color = lab_to_sRGB(newLab);
