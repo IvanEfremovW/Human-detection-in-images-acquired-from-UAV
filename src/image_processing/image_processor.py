@@ -7,8 +7,8 @@ from image_processing.opengl_utils import *
 
 from time import perf_counter
 
-class ImageProcessor:
-    def __init__(self, tile_size=8, clip_limit=2.0):
+class ShaderProcessor:
+    def __init__(self, tile_size=16, clip_limit=2.0):
         self.tile_size = tile_size
         self.clip_limit = clip_limit
         
